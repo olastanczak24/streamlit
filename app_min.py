@@ -1,4 +1,4 @@
-# app_minikube_ports.py — Agent Simulation (Kube & Krateo) with Auto-Run
+# app_minikube_ports.py — Agent Simulation (Kube & Krateo) with Auto-Run & Cost-Reduction Viz
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -391,9 +391,9 @@ def main():
         st.session_state.done = step_and_record(tasks, orch, cost_hist)
 
         if not st.session_state.done:
-            # Keep URL param in sync (optional; useful when sharing links/logs)
-            st.query_params.update({"tick": str(ctx.tick)})
-            # Immediately rerun (no deprecated experimental APIs)
+            # Keep URL param in sync (supported API)
+            st.query_params["tick"] = str(ctx.tick)
+            # Immediately rerun
             st.rerun()
 
     # --- Layout ---
@@ -405,4 +405,31 @@ def main():
 
     c1, c2 = st.columns([3, 2], gap="large")
     with c1:
-        st.subheader("Cost reduction
+        st.subheader("Cost reduction over time (as services move to Kubernetes)")
+        if cost_hist:
+            df = pd.DataFrame(cost_hist, columns=["tick", "legacy", "k8s", "total"])
+            plot_cost_reduction(df)
+        else:
+            st.info("Costs will appear once the simulation starts ticking.")
+
+        st.subheader("Timeline")
+        timeline_table(tasks)
+
+    with c2:
+        st.subheader("Summary")
+        done_cnt = sum(t.observed_at is not None and ctx.tick >= t.observed_at for t in tasks)
+        st.metric("Services migrated (observed)", f"{done_cnt}/{len(tasks)}")
+        st.metric("Current tick", ctx.tick)
+        if cost_hist:
+            cur_total = cost_hist[-1][3]
+            st.metric("Current total cost (rel.)", f"{cur_total:,.0f}")
+            if len(cost_hist) > 1:
+                delta = cost_hist[-2][3] - cur_total
+                st.caption(f"Δ since last tick: {delta:+.0f}")
+
+    st.divider()
+    render_logs(ctx.logs)
+
+if __name__ == "__main__":
+    main()
+
