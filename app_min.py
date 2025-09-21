@@ -166,31 +166,31 @@ LANES = [
     ("migration", "observability"),
 ]
 
-# ---- Palette (jak na screenie) ----
+# ---- Palette  ----
 PALETTE = {
-    "bg_top":    "#1a1037",  # ciemny fiolet (góra)
-    "bg_bottom": "#2b1459",  # cieplejszy fiolet (dół)
-    "lane":      "#a999ff",  # lawenda (linie szlaków)
-    "port_fill": "#2f2950",  # wypełnienie portów
-    "port_edge": "#6b5bd5",  # obwódka portów
-    "dock":      "#463c82",  # dok
-    "label":     "#ecebff",  # podpisy
-    "stack":     "#e6e6f8",  # komin
-    "window":    "#8fd6ff",  # bulaje (cyjan)
-    "wake":      "#c7b9ff",  # kilwater
-    "hull_edge": "#0e0b2a",  # ciemna krawędź
+    "bg_top":    "#1a1037",  # dark purple (top)
+    "bg_bottom": "#2b1459",  # warmer purple (bottom)
+    "lane":      "#a999ff",  # lavender (lane lines)
+    "port_fill": "#2f2950",  # port fill
+    "port_edge": "#6b5bd5",  # port edge
+    "dock":      "#463c82",  # dock
+    "label":     "#ecebff",  # labels
+    "stack":     "#e6e6f8",  # stack/chimney
+    "window":    "#8fd6ff",  # portholes (cyan)
+    "wake":      "#c7b9ff",  # wake
+    "hull_edge": "#0e0b2a",  # dark hull edge
 }
 
 CRIT_COLOR = {
-    "low":  "#27e1ff",  # cyjan
-    "med":  "#7c4dff",  # fiolet
-    "high": "#ff3dbe",  # neonowy róż
+    "low":  "#27e1ff",  # cyan
+    "med":  "#7c4dff",  # purple
+    "high": "#ff3dbe",  # neon pink
 }
 
 TYPE_EDGE = {
     "stateless": "#3f51b5",  # indigo
-    "stateful":  "#2979ff",  # niebieski
-    "cron":      "#ff2d95",  # magenta/róż
+    "stateful":  "#2979ff",  # blue
+    "cron":      "#ff2d95",  # magenta/pink
 }
 
 def _interp(p1, p2, t: float) -> Tuple[float, float]:
