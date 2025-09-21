@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
+import time
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -232,7 +233,7 @@ def task_position_at_tick(task: Task, tick: int) -> Tuple[float, float]:
     return PORTS["observability"]
 
 def draw_ports_background(ax):
-    # --- gradientowe tło (góra->dół) ---
+    # --- gradient background (top->bottom) ---
     h = 256
     grad = np.linspace(0, 1, h).reshape(h, 1, 1)
     top = np.array(_hex_to_rgb01(PALETTE["bg_top"])).reshape(1, 1, 3)
@@ -240,7 +241,7 @@ def draw_ports_background(ax):
     img = (1 - grad) * top + grad * bot
     ax.imshow(img, extent=(0, 1, 0, 1), origin="lower", aspect="auto", zorder=0)
 
-    # --- pasy między portami ---
+    # --- lanes between ports ---
     for a, b in LANES:
         p1, p2 = PORTS[a], PORTS[b]
         ax.add_patch(FancyArrowPatch(
@@ -249,7 +250,7 @@ def draw_ports_background(ax):
             edgecolor=PALETTE["lane"], zorder=1
         ))
 
-    # --- porty + doki + etykiety ---
+    # --- ports + docks + labels ---
     for name, (x, y) in PORTS.items():
         ax.add_patch(Circle(
             (x, y), 0.038,
@@ -263,12 +264,12 @@ def draw_ports_background(ax):
             edgecolor="none", zorder=2
         ))
         ax.text(x, y + 0.07, name.capitalize(),
-                ha="center", va="bottom",
-                fontsize=10, fontweight="bold",
-                color=PALETTE["label"], zorder=4)
+            ha="center", va="bottom",
+            fontsize=10, fontweight="bold",
+            color=PALETTE["label"], zorder=4)
 
 def draw_ship(ax, x: float, y: float, task: Task, scale: float = 0.03):
-    # kadłub
+    # hull
     L, H = 6 * scale, 2 * scale
     bow = (x + L * 0.5, y)
     stern = (x - L * 0.5, y)
@@ -288,7 +289,7 @@ def draw_ship(ax, x: float, y: float, task: Task, scale: float = 0.03):
     )
     ax.add_patch(hull)
 
-    # komin
+    # stack
     stack_w, stack_h = L * 0.10, H * 0.9
     stack = Rectangle(
         (x - L * 0.05, y + H * 0.1), stack_w, stack_h,
@@ -298,7 +299,7 @@ def draw_ship(ax, x: float, y: float, task: Task, scale: float = 0.03):
     )
     ax.add_patch(stack)
 
-    # bulaje (wg complexity)
+    # portholes (by complexity)
     holes = min(4, max(1, task.complexity // 2 + 1))
     for i in range(holes):
         px = x - L * 0.25 + i * (L * 0.15)
@@ -310,14 +311,14 @@ def draw_ship(ax, x: float, y: float, task: Task, scale: float = 0.03):
             linewidth=0.5, zorder=13
         ))
 
-    # kilwater
+    # wake
     wake_len = L * (0.25 + 0.1 * (task.complexity - 1))
     ax.plot([stern[0], stern[0] - wake_len], [y, y - 0.01],
             linewidth=0.7, alpha=0.6, color=PALETTE["wake"], zorder=5)
     ax.plot([stern[0], stern[0] - wake_len * 0.9], [y, y + 0.012],
             linewidth=0.6, alpha=0.5, color=PALETTE["wake"], zorder=5)
 
-    # inicjały usługi
+    # initials
     initials = "".join([tok[0] for tok in task.service_name.split("-")[:2]]).upper()
     ax.text(x, y - H * 0.9, initials, ha="center", va="top",
             fontsize=6, color=PALETTE["label"], zorder=13)
@@ -396,13 +397,15 @@ def center_title(text: str):
         unsafe_allow_html=True,
     )
 
-def sidebar_params() -> tuple[int, int, bool]:
+def sidebar_params() -> tuple[int, int, bool, bool, float]:
     st.sidebar.header("Simulation")
     seed = st.sidebar.number_input("Seed RNG", min_value=0, max_value=10_000_000, value=42, step=1)
     num_tasks = st.sidebar.slider("Number of services/tasks", 5, 100, 30,
-                                  help="Symuluj nawet 100 usług/serwerów.")
+                                  help="Simulate up to 100 services.")
+    autoplay = st.sidebar.checkbox("Auto-play", value=True, help="Advance the simulation automatically.")
+    interval = st.sidebar.number_input("Tick interval (sec)", min_value=0.5, max_value=30.0, value=3.0, step=0.5)
     run_btn = st.sidebar.button("Run / Reset", type="primary")
-    return num_tasks, seed, run_btn
+    return num_tasks, seed, run_btn, autoplay, interval
 
 def timeline_table(tasks: List[Task]):
     rows = []
@@ -442,7 +445,7 @@ def main():
     st.set_page_config(page_title="Agent Simulation — Neon Purple", layout="wide")
     center_title("Agent-based migration — Neon Purple Edition")
 
-    num_tasks, seed, run_btn = sidebar_params()
+    num_tasks, seed, run_btn, autoplay, interval = sidebar_params()
 
     # (Re)start sim on first load or when user presses Run/Reset
     if run_btn or "sim_started" not in st.session_state:
@@ -459,17 +462,7 @@ def main():
     orch: Orchestrator = st.session_state.orch
     cost_hist: list = st.session_state.cost_hist
 
-    # --- Auto-play: advance a tick per run; stop when done ---
-    if not st.session_state.done:
-        st.session_state.done = step_and_record(tasks, orch, cost_hist)
-
-        if not st.session_state.done:
-            # Keep URL param in sync (supported API)
-            st.query_params["tick"] = str(ctx.tick)
-            # Immediately rerun
-            st.rerun()
-
-    # --- Layout ---
+    # --- Layout (render current frame first) ---
     st.subheader(f"NetLogo-like center — tick: {ctx.tick} {'(done)' if st.session_state.done else ''}")
     fig = ships_frame(tasks, ctx.tick)
     st.pyplot(fig, use_container_width=True)
@@ -502,6 +495,13 @@ def main():
 
     st.divider()
     render_logs(ctx.logs)
+
+    # --- Auto-play AFTER rendering: wait -> step once -> rerun ---
+    if autoplay and not st.session_state.done:
+        time.sleep(float(interval))
+        st.session_state.done = step_and_record(tasks, orch, cost_hist)
+        st.query_params["tick"] = str(ctx.tick)
+        st.rerun()
 
 if __name__ == "__main__":
     main()
