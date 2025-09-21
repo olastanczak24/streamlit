@@ -1,4 +1,4 @@
-# app_minikube_ports.py — Agent Simulation (Kube & Krateo) with Auto-Run & Cost-Reduction Viz
+# app_minikube_ports_purple.py — Agent Simulation (Neon Purple Edition)
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -150,7 +150,7 @@ class Orchestrator:
 
 
 # =========================
-# Ports & Ships visualization
+# Neon Purple Palette + Viz
 # =========================
 PORTS = {
     "backlog": (0.05, 0.5),
@@ -166,11 +166,42 @@ LANES = [
     ("migration", "observability"),
 ]
 
-CRIT_COLOR = {"low": "#4caf50", "med": "#ffb300", "high": "#e53935"}
-TYPE_EDGE = {"stateless": "#2e7d32", "stateful": "#1e88e5", "cron": "#6a1b9a"}
+# ---- Palette (jak na screenie) ----
+PALETTE = {
+    "bg_top":    "#1a1037",  # ciemny fiolet (góra)
+    "bg_bottom": "#2b1459",  # cieplejszy fiolet (dół)
+    "lane":      "#a999ff",  # lawenda (linie szlaków)
+    "port_fill": "#2f2950",  # wypełnienie portów
+    "port_edge": "#6b5bd5",  # obwódka portów
+    "dock":      "#463c82",  # dok
+    "label":     "#ecebff",  # podpisy
+    "stack":     "#e6e6f8",  # komin
+    "window":    "#8fd6ff",  # bulaje (cyjan)
+    "wake":      "#c7b9ff",  # kilwater
+    "hull_edge": "#0e0b2a",  # ciemna krawędź
+}
+
+CRIT_COLOR = {
+    "low":  "#27e1ff",  # cyjan
+    "med":  "#7c4dff",  # fiolet
+    "high": "#ff3dbe",  # neonowy róż
+}
+
+TYPE_EDGE = {
+    "stateless": "#3f51b5",  # indigo
+    "stateful":  "#2979ff",  # niebieski
+    "cron":      "#ff2d95",  # magenta/róż
+}
 
 def _interp(p1, p2, t: float) -> Tuple[float, float]:
     return (p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t)
+
+def _hex_to_rgb01(hex_color: str) -> Tuple[float, float, float]:
+    hex_color = hex_color.lstrip("#")
+    r = int(hex_color[0:2], 16) / 255.0
+    g = int(hex_color[2:4], 16) / 255.0
+    b = int(hex_color[4:6], 16) / 255.0
+    return (r, g, b)
 
 def task_position_at_tick(task: Task, tick: int) -> Tuple[float, float]:
     t0 = task.discovered_at
@@ -201,19 +232,43 @@ def task_position_at_tick(task: Task, tick: int) -> Tuple[float, float]:
     return PORTS["observability"]
 
 def draw_ports_background(ax):
-    ax.add_patch(Rectangle((0, 0), 1, 1, facecolor="#e6f3ff", edgecolor="none", zorder=0))
+    # --- gradientowe tło (góra->dół) ---
+    h = 256
+    grad = np.linspace(0, 1, h).reshape(h, 1, 1)
+    top = np.array(_hex_to_rgb01(PALETTE["bg_top"])).reshape(1, 1, 3)
+    bot = np.array(_hex_to_rgb01(PALETTE["bg_bottom"])).reshape(1, 1, 3)
+    img = (1 - grad) * top + grad * bot
+    ax.imshow(img, extent=(0, 1, 0, 1), origin="lower", aspect="auto", zorder=0)
+
+    # --- pasy między portami ---
     for a, b in LANES:
         p1, p2 = PORTS[a], PORTS[b]
-        ax.add_patch(FancyArrowPatch(p1, p2, arrowstyle="-", linewidth=1.5,
-                                     linestyle="--", alpha=0.35, zorder=1))
+        ax.add_patch(FancyArrowPatch(
+            p1, p2, arrowstyle="-", linewidth=1.8,
+            linestyle="--", alpha=0.55,
+            edgecolor=PALETTE["lane"], zorder=1
+        ))
+
+    # --- porty + doki + etykiety ---
     for name, (x, y) in PORTS.items():
-        ax.add_patch(Circle((x, y), 0.035, facecolor="#cfd8dc", edgecolor="#455a64", linewidth=1.5, zorder=3))
-        ax.add_patch(Rectangle((x - 0.05, y - 0.01), 0.1, 0.02, facecolor="#90a4ae", edgecolor="#37474f", zorder=2))
-        ax.text(x, y + 0.07, name.capitalize(), ha="center", va="bottom",
-                fontsize=10, fontweight="bold", color="#263238", zorder=4)
+        ax.add_patch(Circle(
+            (x, y), 0.038,
+            facecolor=PALETTE["port_fill"],
+            edgecolor=PALETTE["port_edge"],
+            linewidth=1.6, zorder=3
+        ))
+        ax.add_patch(Rectangle(
+            (x - 0.05, y - 0.012), 0.10, 0.024,
+            facecolor=PALETTE["dock"],
+            edgecolor="none", zorder=2
+        ))
+        ax.text(x, y + 0.07, name.capitalize(),
+                ha="center", va="bottom",
+                fontsize=10, fontweight="bold",
+                color=PALETTE["label"], zorder=4)
 
 def draw_ship(ax, x: float, y: float, task: Task, scale: float = 0.03):
-    # tapered hull polygon (bow & stern)
+    # kadłub
     L, H = 6 * scale, 2 * scale
     bow = (x + L * 0.5, y)
     stern = (x - L * 0.5, y)
@@ -225,34 +280,47 @@ def draw_ship(ax, x: float, y: float, task: Task, scale: float = 0.03):
         (stern[0] + L * 0.10, y + H * 0.5),
         (stern[0], y),
     ]
-    hull = Polygon(hull_pts, closed=True,
-                   facecolor=CRIT_COLOR[task.criticality],
-                   edgecolor=TYPE_EDGE[task.type],
-                   linewidth=1.0, alpha=0.95, zorder=10)
+    hull = Polygon(
+        hull_pts, closed=True,
+        facecolor=CRIT_COLOR[task.criticality],
+        edgecolor=TYPE_EDGE[task.type],
+        linewidth=1.2, alpha=0.98, zorder=10
+    )
     ax.add_patch(hull)
 
-    # stack
+    # komin
     stack_w, stack_h = L * 0.10, H * 0.9
-    stack = Rectangle((x - L * 0.05, y + H * 0.1), stack_w, stack_h,
-                      facecolor="#eeeeee", edgecolor="#455a64", linewidth=0.8, zorder=12)
+    stack = Rectangle(
+        (x - L * 0.05, y + H * 0.1), stack_w, stack_h,
+        facecolor=PALETTE["stack"],
+        edgecolor=TYPE_EDGE[task.type],
+        linewidth=0.8, zorder=12
+    )
     ax.add_patch(stack)
 
-    # portholes (by complexity)
+    # bulaje (wg complexity)
     holes = min(4, max(1, task.complexity // 2 + 1))
     for i in range(holes):
         px = x - L * 0.25 + i * (L * 0.15)
         py = y
-        ax.add_patch(Circle((px, py), radius=0.12 * scale,
-                            facecolor="#bbdefb", edgecolor="#37474f", linewidth=0.5, zorder=13))
+        ax.add_patch(Circle(
+            (px, py), radius=0.12 * scale,
+            facecolor=PALETTE["window"],
+            edgecolor=PALETTE["hull_edge"],
+            linewidth=0.5, zorder=13
+        ))
 
-    # wake
+    # kilwater
     wake_len = L * (0.25 + 0.1 * (task.complexity - 1))
-    ax.plot([stern[0], stern[0] - wake_len], [y, y - 0.01], linewidth=0.6, alpha=0.5, zorder=5)
-    ax.plot([stern[0], stern[0] - wake_len * 0.9], [y, y + 0.012], linewidth=0.5, alpha=0.4, zorder=5)
+    ax.plot([stern[0], stern[0] - wake_len], [y, y - 0.01],
+            linewidth=0.7, alpha=0.6, color=PALETTE["wake"], zorder=5)
+    ax.plot([stern[0], stern[0] - wake_len * 0.9], [y, y + 0.012],
+            linewidth=0.6, alpha=0.5, color=PALETTE["wake"], zorder=5)
 
-    # service initials
+    # inicjały usługi
     initials = "".join([tok[0] for tok in task.service_name.split("-")[:2]]).upper()
-    ax.text(x, y - H * 0.9, initials, ha="center", va="top", fontsize=6, color="#0d1b2a", zorder=13)
+    ax.text(x, y - H * 0.9, initials, ha="center", va="top",
+            fontsize=6, color=PALETTE["label"], zorder=13)
 
 def ships_frame(tasks: List[Task], tick: int):
     fig, ax = plt.subplots(figsize=(9.5, 5.2))
@@ -269,7 +337,7 @@ def ships_frame(tasks: List[Task], tick: int):
         y += jit[t.task_id]
         draw_ship(ax, x, y, t)
 
-    ax.set_title("Shipping lanes between departments — tasks as container ships", fontsize=12, pad=8)
+    ax.set_title("Shipping lanes — neon purple edition", fontsize=12, pad=8, color=PALETTE["label"])
     plt.tight_layout()
     return fig
 
@@ -300,13 +368,18 @@ def cost_at_tick(tasks: List[Task], tick: int) -> Tuple[float, float, float]:
 
 def plot_cost_reduction(df: pd.DataFrame):
     fig, ax = plt.subplots(figsize=(8.5, 4))
-    ax.plot(df["tick"], df["total"], marker="o", label="Total cost")
-    ax.plot(df["tick"], df["legacy"], linestyle="--", label="Legacy portion")
-    ax.plot(df["tick"], df["k8s"], linestyle=":", label="K8s portion")
-    ax.set_xlabel("Tick (simulation time)")
-    ax.set_ylabel("Cost (relative units)")
-    ax.set_title("Company cost reduction as services migrate to Kubernetes")
-    ax.legend()
+    fig.patch.set_facecolor(PALETTE["bg_bottom"])
+    ax.set_facecolor(PALETTE["bg_top"])
+    ax.plot(df["tick"], df["total"], marker="o", label="Total", linewidth=2.0, color="#ff3dbe")
+    ax.plot(df["tick"], df["legacy"], linestyle="--", label="Legacy", linewidth=1.8, color="#7c4dff")
+    ax.plot(df["tick"], df["k8s"], linestyle=":", label="K8s", linewidth=1.8, color="#27e1ff")
+    ax.set_xlabel("Tick (simulation time)", color=PALETTE["label"])
+    ax.set_ylabel("Cost (relative units)", color=PALETTE["label"])
+    ax.set_title("Company cost reduction", color=PALETTE["label"])
+    ax.tick_params(colors=PALETTE["label"])
+    for spine in ax.spines.values():
+        spine.set_color(PALETTE["label"])
+    ax.legend(facecolor=PALETTE["bg_top"], edgecolor=PALETTE["label"])
     st.pyplot(fig, use_container_width=True)
 
 
@@ -316,7 +389,7 @@ def plot_cost_reduction(df: pd.DataFrame):
 def center_title(text: str):
     st.markdown(
         f"""
-        <div style="text-align:center; font-size: 28px; font-weight: 700; padding: 6px 0;">
+        <div style="text-align:center; font-size: 28px; font-weight: 700; padding: 6px 0; color:{PALETTE["label"]}">
             {text}
         </div>
         """,
@@ -366,8 +439,8 @@ def step_and_record(tasks: List[Task], orch: Orchestrator, cost_hist: list):
     return done
 
 def main():
-    st.set_page_config(page_title="Agent Simulation — Ships & Costs", layout="wide")
-    center_title("Agent-based migration with Kube & Krateo — Ships & Cost Reduction")
+    st.set_page_config(page_title="Agent Simulation — Neon Purple", layout="wide")
+    center_title("Agent-based migration — Neon Purple Edition")
 
     num_tasks, seed, run_btn = sidebar_params()
 
@@ -432,4 +505,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
